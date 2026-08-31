@@ -23,8 +23,25 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+import os
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# NOTE: logging.basicConfig must be called BEFORE any app imports,
+# because app modules trigger logging calls during import which
+# auto-configure the root logger and make later basicConfig a no-op.
+import logging
+logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+
+if os.getenv("KAI_FLOW_LOGGING_PRESET", "").strip().lower() == "disabled":
+    logging.disable(logging.CRITICAL)
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db_session_context
 from app.core.encryption import decrypt_data
@@ -32,9 +49,12 @@ from app.models.workflow import Workflow
 from app.models.user_credential import UserCredential
 from app.models.user import User
 from sqlalchemy import select
-import logging
 
-logger = logging.getLogger(__name__)
+from scripts.workflow_bundle_utils import (
+    CREDENTIAL_FIELD_NAMES,
+    collect_missing_error_workflow_warnings,
+)
+
 
 def get_empty_secret_from_credential(credential: UserCredential) -> Dict[str, Any]:
     """
@@ -59,7 +79,7 @@ def get_empty_secret_from_credential(credential: UserCredential) -> Dict[str, An
         return empty_secret
         
     except Exception as e:
-        logger.exception(f"Warning: Could not decrypt credential: {e}")
+        logger.warning(f"Could not decrypt credential: {e}")
         return {"api_key": ""}
 
 
@@ -103,9 +123,9 @@ async def export_workflows(
                     if workflow:
                         workflows_to_export.append(workflow)
                     else:
-                        logger(f"Warning: Workflow not found: {wf_id}")
+                        logger.warning(f"Workflow not found: {wf_id}")
                 except Exception as e:
-                    logger(f"Warning: Invalid workflow ID {wf_id}: {e}")
+                    logger.warning(f"Invalid workflow ID {wf_id}: {e}")
         
         elif user_email:
             user_result = await db.execute(
@@ -113,7 +133,7 @@ async def export_workflows(
             )
             user = user_result.scalar_one_or_none()
             if not user:
-                logger(f"Error: User not found: {user_email}")
+                logger.error(f"User not found: {user_email}")
                 return
             
             wf_result = await db.execute(
@@ -121,35 +141,21 @@ async def export_workflows(
             )
             workflows_to_export = wf_result.scalars().all()
             config["target_user_email"] = user_email
-            logger(f"Exporting all workflows for: {user_email}")
+            logger.info(f"Exporting all workflows for: {user_email}")
         
         else:
-            logger("Error: Please provide --ids or --user-email")
+            logger.error("Please provide --ids or --user-email")
             return
         
         if not workflows_to_export:
-            logger("Error: No workflows to export")
+            logger.error("No workflows to export")
             return
         
-        logger(f"\nExporting {len(workflows_to_export)} workflow(s)...\n")
+        logger.info(f"Exporting {len(workflows_to_export)} workflow(s)...")
         
         for workflow in workflows_to_export:
             # Keep flow_data as-is (don't modify credential_id)
             flow_data = dict(workflow.flow_data) if workflow.flow_data else {}
-            
-            # Find all credential fields in nodes
-            # Check all known credential field names used by different node types
-            CREDENTIAL_FIELD_NAMES = [
-                "credential_id", "credential",
-                "basic_auth_credential_id", "header_auth_credential_id"
-            ]
-            
-            # Find all credential fields in nodes
-            # Check all known credential field names used by different node types
-            CREDENTIAL_FIELD_NAMES = [
-                "credential_id", "credential",
-                "basic_auth_credential_id", "header_auth_credential_id"
-            ]
             
             for node in flow_data.get("nodes", []):
                 node_data = node.get("data", {})
@@ -172,9 +178,9 @@ async def export_workflows(
                                     "service_type": cred.service_type,
                                     "secret": empty_secret
                                 }
-                                logger(f"Credential: {cred.name} (ID: {cred_id})")
+                                logger.info(f"Credential: {cred.name} (ID: {cred_id})")
                         except Exception as e:
-                            logger(f"Warning: Could not process credential {cred_id}: {e}")
+                            logger.warning(f"Could not process credential {cred_id}: {e}")
             
             # Save flow file (unchanged - keeps credential_id as-is)
             safe_name = "".join(c if c.isalnum() or c in "_-" else "_" for c in workflow.name.lower())[:50]
@@ -188,14 +194,18 @@ async def export_workflows(
                 "name": workflow.name,
                 "description": workflow.description or "",
                 "is_public": workflow.is_public,
+                "error_workflow": str(workflow.error_workflow) if workflow.error_workflow else None,
                 "flow_file": flow_file
             })
             
-            logger(f"Exported: {workflow.name} (ID: {workflow.id})")
+            logger.info(f"Exported: {workflow.name} (ID: {workflow.id})")
         
         # Add all found credentials to config
         for cred_info in seen_credentials.values():
             config["credentials"].append(cred_info)
+
+        for warning in collect_missing_error_workflow_warnings(config["workflows"]):
+            logger.warning(warning)
     
     # Write YAML config
     yaml_content = yaml.dump(
@@ -242,11 +252,11 @@ python -m scripts.import_workflows --config /path/to/{safe_export_name}_workflow
     
     (output_path / "README.md").write_text(readme, encoding="utf-8")
     
-    logger(f"\n{'='*50}")
-    logger(f"Export complete: {output_path.absolute()}")
-    logger(f"Workflows: {len(config['workflows'])}")
-    logger(f"Credentials: {len(config['credentials'])}")
-    logger(f"\nIMPORTANT: Fill credential secrets before import!")
+    logger.info("=" * 50)
+    logger.info(f"Export complete: {output_path.absolute()}")
+    logger.info(f"Workflows: {len(config['workflows'])}")
+    logger.info(f"Credentials: {len(config['credentials'])}")
+    logger.info("IMPORTANT: Fill credential secrets before import!")
 
 
 def main():
@@ -276,4 +286,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

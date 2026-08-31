@@ -14,9 +14,21 @@ export const NodeCheckbox = ({ property, values }: NodeCheckboxProps) => {
   const show = displayOptions.show || {};
 
   if (Object.keys(show).length > 0) {
+    const compare = (name: string, expected: any) => {
+      const current = values[name];
+      if (expected === "*") {
+        return current !== undefined && current !== null && current !== "";
+      }
+      return Array.isArray(expected) ? expected.includes(current) : current === expected;
+    };
+
     for (const [dependencyName, validValue] of Object.entries(show)) {
-      const dependencyValue = values[dependencyName];
-      if (dependencyValue !== validValue) {
+      // "_any" holds alternatives; matching one of them is enough.
+      const matches =
+        dependencyName === "_any" && validValue && typeof validValue === "object"
+          ? Object.entries(validValue).some(([name, expected]) => compare(name, expected))
+          : compare(dependencyName, validValue);
+      if (!matches) {
         return null;
       }
     }
@@ -38,14 +50,12 @@ export const NodeCheckbox = ({ property, values }: NodeCheckboxProps) => {
           onClick={() => helpers.setValue(!isChecked)}
           onMouseDown={(e: any) => e.stopPropagation()}
           onTouchStart={(e: any) => e.stopPropagation()}
-          className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-            isChecked ? "bg-blue-500" : "bg-slate-600"
-          }`}
+          className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${isChecked ? "bg-blue-500" : "bg-slate-600"
+            }`}
         >
           <span
-            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-              isChecked ? "translate-x-5" : "translate-x-0"
-            }`}
+            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${isChecked ? "translate-x-5" : "translate-x-0"
+              }`}
           />
         </button>
       </div>

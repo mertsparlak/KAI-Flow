@@ -17,6 +17,7 @@ interface CredentialSelectorProps {
   onChange: (credentialId: string) => void;
   onCredentialLoad?: (credential: any) => void;
   serviceType?: string; // Optional: filter credentials by service type
+  allowedServiceTypes?: string[]; // Optional: filter credentials by multiple service types
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -29,6 +30,7 @@ const CredentialSelector: React.FC<CredentialSelectorProps> = ({
   onChange,
   onCredentialLoad,
   serviceType,
+  allowedServiceTypes,
   placeholder = "Select API Key",
   disabled = false,
   className = "",
@@ -70,7 +72,9 @@ const CredentialSelector: React.FC<CredentialSelectorProps> = ({
   }, [fetchCredentials]);
 
   // Filter credentials by service type if specified
-  const filteredCredentials = serviceType
+  const filteredCredentials = allowedServiceTypes
+    ? userCredentials.filter((cred) => allowedServiceTypes.includes(cred.service_type))
+    : serviceType
     ? userCredentials.filter((cred) => {
         if (cred.service_type === serviceType) return true;
         if (includeGenericFallback && cred.service_type === "generic_api") {
@@ -317,6 +321,7 @@ const CredentialSelector: React.FC<CredentialSelectorProps> = ({
         createPortal(
           <div className="z-[9999]">
             <ServiceSelectionModal
+              allowedServiceTypes={allowedServiceTypes}
               onSelectService={handleServiceSelect}
               onClose={() => setShowServiceSelection(false)}
             />
@@ -327,7 +332,7 @@ const CredentialSelector: React.FC<CredentialSelectorProps> = ({
       {/* Dynamic Credential Form Modal */}
       {selectedService &&
         createPortal(
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">

@@ -1,12 +1,3 @@
-"""
-Comprehensive logging middleware for FastAPI applications.
-
-This module provides multiple middleware classes for different aspects of logging:
-- DetailedLoggingMiddleware: Complete request/response logging with timing
-- DatabaseQueryLoggingMiddleware: Database usage tracking per request
-- SecurityLoggingMiddleware: Security event monitoring and suspicious activity detection
-"""
-
 import time
 import uuid
 import json
@@ -28,16 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class DetailedLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware for detailed API request/response logging.
-    
-    Logs:
-    - Request method, path, headers, query parameters
-    - Response status, headers, timing
-    - Request/response body (configurable)
-    - Client IP address and user agent
-    - Request ID for correlation
-    """
     
     def __init__(
         self, 
@@ -64,19 +45,13 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
         
         start_time = time.time()
         
-        # Extract client information
-        client_ip = self._extract_client_ip(request)
-        user_agent = request.headers.get("user-agent", "unknown")
-        
         # Prepare request data
         request_data = {
             "request_id": request_id,
             "method": request.method,
             "path": request.url.path,
-            "query_params": dict(request.query_params),
-            "client_ip": client_ip,
-            "user_agent": user_agent,
-            "headers": self._sanitize_headers(dict(request.headers)),
+            "query_param_names": list(request.query_params.keys()),
+            "header_names": list(request.headers.keys()),
             "content_type": request.headers.get("content-type"),
             "content_length": request.headers.get("content-length")
         }
@@ -103,7 +78,7 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
                 request_data["request_body_error"] = str(e)
         
         # Log request start
-        logger.info("API request started", extra=request_data)
+        logger.debug("API request started", extra=request_data)
         
         # Process request
         try:
@@ -118,7 +93,6 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
                 "status_code": response.status_code,
                 "duration_seconds": round(duration, 4),
                 "duration_ms": round(duration * 1000, 2),
-                "response_headers": self._sanitize_headers(dict(response.headers)),
                 "content_type": response.headers.get("content-type")
             }
             
@@ -145,13 +119,12 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
                 status_code=response.status_code,
                 duration=duration,
-                request_id=request_id,
-                client_ip=client_ip,
-                user_agent=user_agent
+                request_id=request_id
             )
-            
+
             # Log detailed response
-            logger.info("API request completed", extra=response_data)
+            logger.debug("API request completed", extra=response_data)
+            response.headers["X-Request-ID"] = request_id
             
             return response
             
@@ -159,9 +132,8 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
             
             # Log error
-            logger.error("API request failed", extra={
+            logger.exception("API request failed", extra={
                 "request_id": request_id,
-                "error": str(e),
                 "error_type": type(e).__name__,
                 "duration_seconds": round(duration, 4),
                 "duration_ms": round(duration * 1000, 2)
@@ -170,7 +142,6 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
             raise
     
     def _extract_client_ip(self, request: Request) -> str:
-        """Extract client IP address, considering proxy headers."""
         # Check X-Forwarded-For header (proxy)
         forwarded_for = request.headers.get("x-forwarded-for")
         if forwarded_for:
@@ -189,7 +160,6 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
         return "unknown"
     
     def _sanitize_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
-        """Sanitize headers by removing sensitive information."""
         sensitive_headers = {
             "authorization", "cookie", "x-api-key", "x-auth-token",
             "x-csrf-token", "x-access-token", "x-refresh-token"
@@ -206,11 +176,6 @@ class DetailedLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class DatabaseQueryLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware for tracking database usage per request.
-    
-    Logs database statistics and query counts for each API request.
-    """
     
     def __init__(self, app: ASGIApp):
         super().__init__(app)
@@ -250,17 +215,6 @@ class DatabaseQueryLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class SecurityLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware for security event monitoring and suspicious activity detection.
-    
-    Monitors for:
-    - SQL injection attempts
-    - XSS attempts
-    - Path traversal attempts
-    - Suspicious user agents
-    - Rate limiting violations
-    - Authentication failures
-    """
     
     def __init__(
         self, 
@@ -322,7 +276,8 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
                 f"/{API_START}/{API_VERSION}/webhook/",
                 f"/{API_START}/{API_VERSION}/webhook-test/",
                 f"/{API_START}/{API_VERSION}/nodes/",
-                f"/{API_START}/{API_VERSION}/workflows/"
+                f"/{API_START}/{API_VERSION}/workflows/",
+                f"/{API_START}/{API_VERSION}/ai-builder/"
             ]
             
             should_detect = True
@@ -365,26 +320,24 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
         user_agent: str, 
         request_id: str
     ):
-        """Detect and log suspicious activity patterns."""
         suspicious_events = []
         
         # Check user agent
         if any(suspicious in user_agent for suspicious in self.suspicious_user_agents):
             suspicious_events.append({
                 "type": "suspicious_user_agent",
-                "pattern": user_agent,
+                "pattern": "known_scanner_user_agent",
                 "severity": "warning"
             })
         
         # Check URL path
-        url_path = str(request.url)
+        url_path = request.url.path
         for pattern_type, patterns in self.compiled_patterns.items():
             for pattern in patterns:
                 if pattern.search(url_path):
                     suspicious_events.append({
                         "type": f"suspicious_{pattern_type}_in_url",
                         "pattern": pattern.pattern,
-                        "matched_text": url_path,
                         "severity": "error"
                     })
                     break
@@ -398,7 +351,6 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
                             "type": f"suspicious_{pattern_type}_in_query",
                             "parameter": param_name,
                             "pattern": pattern.pattern,
-                            "matched_text": param_value[:100],  # Limit for logging
                             "severity": "error"
                         })
                         break
@@ -416,7 +368,6 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
                                 suspicious_events.append({
                                     "type": f"suspicious_{pattern_type}_in_body",
                                     "pattern": pattern.pattern,
-                                    "matched_text": body_str[:100],  # Limit for logging
                                     "severity": "error"
                                 })
                                 break
@@ -437,14 +388,12 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "pattern": event.get("pattern"),
-                    "matched_text": event.get("matched_text"),
                     "parameter": event.get("parameter")
                 },
                 severity=event["severity"]
             )
     
     def _log_security_headers(self, request: Request, request_id: str):
-        """Log security-relevant headers."""
         security_headers = {
             "x-forwarded-for", "x-real-ip", "x-forwarded-proto",
             "authorization", "cookie", "x-api-key", "x-csrf-token",
@@ -464,7 +413,6 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
             })
     
     def _extract_client_ip(self, request: Request) -> str:
-        """Extract client IP address, considering proxy headers."""
         # Check X-Forwarded-For header (proxy)
         forwarded_for = request.headers.get("x-forwarded-for")
         if forwarded_for:

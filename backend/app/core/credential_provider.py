@@ -9,9 +9,7 @@ from app.services.dependencies import get_credential_service_dep
 from app.core.database import get_db_session_context, SessionLocal
 from app.models.user_credential import UserCredential
 import base64
-# ------------------------------------------------------------------
-# Legacy Supabase dependency – replaced by SQLAlchemy layer.
-# ------------------------------------------------------------------
+# Credential management via SQLAlchemy + CredentialService layer.
 logger = logging.getLogger(__name__)
 
 class CredentialProvider:
@@ -131,7 +129,7 @@ class CredentialProvider:
                 
             return self._process_credential_data(credential)
         except Exception as e:
-            print(f"Error fetching credential sync {credential_id}: {e}")
+            logger.error("Error fetching credential synchronously (id=%s): %s", credential_id, e)
             return None
         finally:
             session.close()
@@ -199,7 +197,7 @@ class CredentialProvider:
                 credential = credentials[0] if credentials else None
             
             if credential:
-                return await self.get_credential(credential.id, context_id=context_id, user_id=user_id)
+                return await self.get_credential(credential.id, user_id=user_id)
             
             return None
             
@@ -286,4 +284,4 @@ def set_workflow_context(context_id: str, user_id: str):
 
 def clear_workflow_context(context_id: str):
     """Clear workflow context"""
-    credential_provider.clear_user_context(context_id) 
+    credential_provider.clear_user_context(context_id)

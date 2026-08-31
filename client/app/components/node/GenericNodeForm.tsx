@@ -8,6 +8,7 @@ import {
   NodeNumber,
   NodePassword,
   NodeSelect,
+  NodeModelSelect,
   NodeCheckbox,
   NodeTitle,
   NodeRange,
@@ -15,11 +16,14 @@ import {
   NodeDateTime,
   NodeCodeEditor,
   NodeSessionId,
+  ThemedNumberInput,
 } from "./fields";
 import { FieldLabel, getFieldHelpText } from "./fields/FieldLabel";
 import TabNavigation from "../common/TabNavigation";
 import { useState, useRef, useEffect } from "react";
 import { Settings, Plus, X, ChevronDown } from "lucide-react";
+import { NodeDynamicSelect } from "./fields/NodeDynamicSelect";
+import { NodeColumnMapper } from "./fields/NodeColumnMapper";
 
 interface GenericNodeFormProps {
   initialValues?: GenericData;
@@ -28,6 +32,53 @@ interface GenericNodeFormProps {
   onCancel: () => void;
   configData?: any;
   onSave?: (values: any) => void;
+  onChange?: (values: GenericData) => void;
+}
+
+const cleanValues = (obj: any): any => {
+  if (obj === null || obj === undefined) return "";
+  if (typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(cleanValues);
+  
+  const cleaned: any = {};
+  const keys = Object.keys(obj).sort();
+  for (const key of keys) {
+    const val = cleanValues(obj[key]);
+    if (val !== "" && val !== null && val !== undefined) {
+      cleaned[key] = val;
+    }
+  }
+  return cleaned;
+};
+
+function FormValuesObserver({
+  values,
+  initialValues,
+  onChange,
+}: {
+  values: GenericData;
+  initialValues: GenericData;
+  onChange?: (values: GenericData) => void;
+}) {
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const valuesKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    // Compare cleaned values. If identical to cleaned initialValues, do not trigger onChange
+    const cleanCurrent = cleanValues(values);
+    const cleanInitial = cleanValues(initialValues);
+    if (JSON.stringify(cleanCurrent) === JSON.stringify(cleanInitial)) {
+      return;
+    }
+
+    const nextKey = JSON.stringify(values);
+    if (valuesKeyRef.current === nextKey) return;
+    valuesKeyRef.current = nextKey;
+    onChangeRef.current?.(values);
+  }, [values, initialValues]);
+
+  return null;
 }
 
 export default function GenericNodeForm({
@@ -37,8 +88,17 @@ export default function GenericNodeForm({
   onCancel,
   configData,
   onSave,
+  onChange,
 }: GenericNodeFormProps) {
-  const properties = configData?.metadata?.properties || [];
+  const rawProperties = configData?.metadata?.properties || [];
+  const nodeType =
+    configData?.metadata?.name || configData?.name || configData?.type;
+  // OpenAI GPT and OpenAI Compatible take the model from the credential; ignore stale saved metadata.
+  const properties =
+    nodeType === "OpenAIChat" || nodeType === "openai_gpt" || nodeType === "OpenAICompatible" || nodeType === "openai_compatible"
+      ? rawProperties.filter((property: NodeProperty) => property.name !== "model_name")
+      : rawProperties;
+  const columnMapperSessionsRef = useRef<Record<string, any>>({});
 
   const tabs = properties.reduce((acc: any[], property: NodeProperty) => {
     const tabId = property.tabName || "basic";
@@ -181,12 +241,33 @@ export default function GenericNodeForm({
         enableReinitialize
       >
         {({ values, errors, touched, isSubmitting, setFieldValue }) => (
-          <Form className="grid grid-cols-2 gap-3 w-full p-6">
+          <>
+            <FormValuesObserver values={values} initialValues={initialValues} onChange={onChange} />
+            <Form className="grid grid-cols-2 gap-3 w-full p-6">
             {getVisibleProperties(activeTab).map((property: NodeProperty) => {
               // Check display options
               if (property.displayOptions?.show) {
                 const shouldShow = Object.entries(property.displayOptions.show).every(
-                  ([key, value]) => values[key] === value
+                  ([key, value]) => {
+                    const matches = (name: string, expected: any) => {
+                      const current = values[name];
+                      // "*" means the field only has to be filled in.
+                      if (expected === "*") {
+                        return current !== undefined && current !== null && current !== "";
+                      }
+                      return Array.isArray(expected)
+                        ? expected.includes(current)
+                        : current === expected;
+                    };
+
+                    // "_any" holds alternatives; matching one of them is enough.
+                    if (key === "_any" && value && typeof value === "object") {
+                      return Object.entries(value).some(([name, expected]) =>
+                        matches(name, expected)
+                      );
+                    }
+                    return matches(key, value);
+                  }
                 );
                 if (!shouldShow) return null;
               }
@@ -206,6 +287,25 @@ export default function GenericNodeForm({
                     );
                   case "select":
                     return <NodeSelect property={fullWidthProperty} values={values} />;
+                  case "model-select":
+                    return <NodeModelSelect property={fullWidthProperty} values={values} />;
+                  case "dynamic-select":
+                    return (
+                      <NodeDynamicSelect
+                        property={fullWidthProperty}
+                        values={values}
+                        nodeType={nodeType}
+                      />
+                    );
+                  case "column-mapper":
+                    return (
+                      <NodeColumnMapper
+                        property={fullWidthProperty}
+                        values={values}
+                        nodeType={nodeType}
+                        sessionStore={columnMapperSessionsRef.current}
+                      />
+                    );
                   case "credential-select":
                     return (
                       <NodeCredentialSelect
@@ -301,13 +401,20 @@ export default function GenericNodeForm({
                         className="text-sm text-slate-200"
                       />
                       <div className="flex items-center gap-3">
-                        <input
-                          type="number"
+                        <ThemedNumberInput
                           value={values[property.name] ?? property.default ?? ""}
-                          onChange={(e) => setFieldValue(property.name, e.target.value ? Number(e.target.value) : "")}
+                          onChange={(nextValue) =>
+                            setFieldValue(
+                              property.name,
+                              nextValue === "" ? "" : Number(nextValue)
+                            )
+                          }
                           min={property.min}
                           max={property.max}
-                          className="w-20 bg-[#10182c] border border-slate-600 rounded-lg px-2 py-1 text-sm text-white text-center focus:outline-none focus:border-blue-500"
+                          step={property.step}
+                          ariaLabel={property.displayName}
+                          size="compact"
+                          className="w-28"
                         />
                         <button
                           type="button"
@@ -342,7 +449,14 @@ export default function GenericNodeForm({
               }
 
               return (
-                <div key={property.name} className="col-span-2 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
+                  <div
+                  key={property.name}
+                  className={
+                    property.type === "title"
+                      ? "col-span-2 pt-3 pb-1"
+                      : "col-span-2 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3"
+                  }
+                >
                   {fieldComponent}
                 </div>
               );
@@ -389,6 +503,7 @@ export default function GenericNodeForm({
               </div>
             )}
           </Form>
+          </>
         )}
       </Formik>
     </div>

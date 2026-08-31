@@ -3,6 +3,8 @@ import { Formik, Form, Field, ErrorMessage } from "formik";
 import { Check, Loader2, X as XIcon, Zap } from "lucide-react";
 import { resolveIconPath } from "~/lib/iconUtils";
 import type { ServiceDefinition, ServiceField } from "~/types/credentials";
+import CredentialPasswordField from "./CredentialPasswordField";
+import CredentialModelCombobox from "./CredentialModelCombobox";
 
 interface DynamicCredentialFormProps {
   service: ServiceDefinition;
@@ -26,6 +28,7 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
   const [iconFailed, setIconFailed] = useState(false);
   const [testState, setTestState] = useState<TestState>("idle");
   const [testMessage, setTestMessage] = useState("");
+
   const validateField = (
     field: ServiceField,
     value: any
@@ -92,7 +95,7 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
   };
 
   const formValues = useMemo(() => {
-    const values: Record<string, any> = {
+    const values = {
       ...initialValues,
     };
 
@@ -106,7 +109,7 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
     return values;
   }, [initialValues, service]);
 
-  const renderField = (field: ServiceField) => {
+  const renderField = (field: ServiceField, values: Record<string, any>) => {
     const commonProps = {
       name: field.name,
       placeholder: field.placeholder,
@@ -115,6 +118,16 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
     };
 
     switch (field.type) {
+      case "model-combobox":
+        return (
+          <CredentialModelCombobox
+            field={field}
+            serviceType={service.id}
+            values={values}
+            className={commonProps.className}
+          />
+        );
+
       case "textarea":
         return (
           <Field
@@ -130,7 +143,7 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
           <Field
             as="select"
             name={field.name}
-            className="select w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 cursor-pointer"
+            className="select select-bordered w-full bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 cursor-pointer"
           >
             <option value="">Select {field.label}</option>
             {field.options?.map((option) => (
@@ -143,7 +156,11 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
 
       case "password":
         return (
-          <Field type="password" {...commonProps} autoComplete="new-password" />
+          <CredentialPasswordField
+            name={field.name}
+            placeholder={field.placeholder}
+            className={commonProps.className}
+          />
         );
 
       case "checkbox":
@@ -236,7 +253,7 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
                     </label>
                   )}
 
-                  {renderField(field)}
+                  {renderField(field, values)}
 
                   {field.description && (
                     <p className="text-xs text-gray-500 mt-1">
@@ -279,10 +296,15 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
                     try {
                       const result = await onTest(values);
                       setTestState(result.success ? "success" : "error");
-                      setTestMessage(result.message);
+                      setTestMessage(
+                        result.message ||
+                          (result.success
+                            ? "Connection successful."
+                            : "Connection failed. Please check your connection details.")
+                      );
                     } catch (error: any) {
                       setTestState("error");
-                      setTestMessage(error?.message || "Unexpected error. Please try again.");
+                      setTestMessage(error?.message || "Connection failed. Please check your connection details.");
                     }
                     setTimeout(() => {
                       setTestState("idle");
@@ -307,7 +329,7 @@ const DynamicCredentialForm: React.FC<DynamicCredentialFormProps> = ({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {isSubmitting ? "Connecting..." : "Connect Service"}
               </button>

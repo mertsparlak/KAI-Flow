@@ -1,7 +1,12 @@
 // User Credential Service Template
 import { apiClient } from '~/lib/api-client';
 import { API_ENDPOINTS } from '~/lib/config';
-import type { UserCredential, CredentialDetailResponse, CredentialCreateRequest } from '~/types/api';
+import type {
+  UserCredential,
+  CredentialDetailResponse,
+  CredentialCreateRequest,
+  CredentialWorkflowUsageResponse,
+} from '~/types/api';
 
 export const getUserCredentials = async (): Promise<UserCredential[]> => {
   return await apiClient.get<UserCredential[]>(API_ENDPOINTS.CREDENTIALS.LIST);
@@ -33,6 +38,43 @@ export const testCredentialRaw = async (
 ): Promise<{ success: boolean; message: string }> => {
   return await apiClient.post<{ success: boolean; message: string }>(
     API_ENDPOINTS.CREDENTIALS.TEST_RAW,
+    { service_type: serviceType, data }
+  );
+};
+
+export const getCredentialWorkflows = async (
+  id: string
+): Promise<CredentialWorkflowUsageResponse> => {
+  return await apiClient.get<CredentialWorkflowUsageResponse>(
+    API_ENDPOINTS.CREDENTIALS.WORKFLOWS(id)
+  );
+};
+
+export interface CredentialModelOption {
+  id: string;
+  owned_by?: string | null;
+}
+
+export interface CredentialModelsResponse {
+  models: CredentialModelOption[];
+  source: 'provider' | 'empty' | string;
+  message?: string | null;
+}
+
+export const getCredentialModels = async (
+  id: string
+): Promise<CredentialModelsResponse> => {
+  return await apiClient.get<CredentialModelsResponse>(
+    API_ENDPOINTS.CREDENTIALS.MODELS(id)
+  );
+};
+
+export const listModelsRaw = async (
+  serviceType: string,
+  data: Record<string, any>
+): Promise<CredentialModelsResponse> => {
+  return await apiClient.post<CredentialModelsResponse>(
+    API_ENDPOINTS.CREDENTIALS.LIST_MODELS,
     { service_type: serviceType, data }
   );
 };

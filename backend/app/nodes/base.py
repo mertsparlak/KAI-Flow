@@ -119,6 +119,8 @@ class NodePropertyType(str, Enum):
     DATETIME = "datetime"
     CODE_EDITOR = "code-editor"
     SESSION_ID = "session-id"
+    DYNAMIC_SELECT = "dynamic-select"
+    COLUMN_MAPPER = "column-mapper"
 
 
 class NodeProperty(BaseModel):
@@ -234,6 +236,22 @@ class NodeProperty(BaseModel):
     minLength: Optional[int] = Field(
         default=None,
         description="Minimum length of the input"
+    )
+    optionsMethod: Optional[str] = Field(
+        default=None,
+        description="Name of the method on the node that returns the option list",
+        alias="optionsMethod"
+    )
+
+    optionsDependsOn: Optional[List[str]] = Field(
+        default=None,
+        description="Fields that trigger a refetch of the option list when they change",
+        alias="optionsDependsOn"
+    )
+
+    multiple: Optional[bool] = Field(
+        default=None,
+        description="Allow more than one value to be selected"
     )
     
     colSpan: Optional[int] = Field(
@@ -639,6 +657,13 @@ class BaseNode(ABC):
         meta = getattr(self, "_metadata", {})
         return meta.get("condition")
 
+    def validate_configuration(self, **inputs) -> None:
+        """Validate this node's own settings before resolving dependencies.
+
+        Dependency-aware nodes override this hook when ordering matters.
+        """
+        return None
+
     def execute(self, *args, **kwargs) -> Runnable:
         """Main execution method.
 
@@ -791,11 +816,9 @@ class BaseNode(ABC):
                     state.node_outputs = {}
                 state.node_outputs[node_id] = standard_error_output
                 
-                return {
-                    "errors": state.errors,
-                    "last_output": f"ERROR: {error_msg}",
-                    "node_outputs": state.node_outputs
-                }
+                # Recording an error is not a successful node result. Let the
+                # execution layer preserve ownership and publish a failed status.
+                raise
         
         return graph_node_function
     
@@ -818,7 +841,9 @@ class BaseNode(ABC):
                 executed_result = result.invoke(invoke_input)
                 return executed_result
             except Exception as e:
-                return f"Runnable execution error: {str(e)}"
+                raise RuntimeError(
+                    f"Runnable execution error: {str(e)}"
+                ) from e
         
         # For other types, ensure JSON-serializable
         try:
@@ -890,7 +915,7 @@ class BaseNode(ABC):
                             logger.debug(f"No executed source found in connections, using last_output fallback")
                             if state.last_output:
                                 connected[input_spec.name] = state.last_output
-                                logger.debug(f"Using last_output: {str(state.last_output)[:100]}...")
+                                logger.debug("Using last output (type=%s)", type(state.last_output).__name__)
                             continue
                     else:
                         # Single connection: direct dict format
@@ -905,7 +930,7 @@ class BaseNode(ABC):
                     # Debug output to see what's in state
                     logger.debug(f"Looking for output_key: {output_key}")
                     logger.debug(f"Available state variables: {list(state.variables.keys())}")
-                    logger.debug(f"State.last_output: {state.last_output}")
+                    logger.debug("State has last output: %s", bool(state.last_output))
                     
                     # Check multiple possible locations for the output
                     found_output = None
@@ -913,12 +938,12 @@ class BaseNode(ABC):
                     # 1. Check if it's a dynamic attribute on the state (Pydantic extra fields)
                     if hasattr(state, output_key):
                         found_output = getattr(state, output_key)
-                        logger.debug(f"Found as state attribute: {found_output}")
+                        logger.debug("Found output as state attribute (type=%s)", type(found_output).__name__)
                     
                     # 2. Check state variables
                     elif output_key in state.variables:
                         found_output = state.get_variable(output_key)
-                        logger.debug(f"Found in state.variables: {found_output}")
+                        logger.debug("Found output in state variables (type=%s)", type(found_output).__name__)
                     
                     # 3. Check node_outputs if available
                     elif hasattr(state, 'node_outputs') and source_node_id in state.node_outputs:
@@ -927,14 +952,14 @@ class BaseNode(ABC):
                             found_output = node_output['output']
                         else:
                             found_output = node_output
-                        logger.debug(f"Found in node_outputs: {found_output}")
+                        logger.debug("Found output in node outputs (type=%s)", type(found_output).__name__)
                     
                     # 4. Use the state's built-in get_node_output method
                     elif hasattr(state, 'get_node_output'):
                         try:
                             found_output = state.get_node_output(source_node_id)
                             if found_output is not None:
-                                logger.debug(f"Found via get_node_output: {found_output}")
+                                logger.debug("Found output via get_node_output (type=%s)", type(found_output).__name__)
                         except:
                             pass
                     
@@ -944,11 +969,11 @@ class BaseNode(ABC):
                         executed_nodes = getattr(state, 'executed_nodes', []) or []
                         if executed_nodes and executed_nodes[-1] == source_node_id:
                             found_output = state.last_output
-                            logger.debug(f"Using last_output as fallback: {found_output}")
+                            logger.debug("Using last output as fallback (type=%s)", type(found_output).__name__)
                     
                     if found_output is not None:
                         connected[input_spec.name] = found_output
-                        logger.debug(f"Connected input {input_spec.name} = '{str(found_output)[:100]}...'")
+                        logger.debug("Connected input %s resolved (type=%s)", input_spec.name, type(found_output).__name__)
                     elif input_spec.required:
                         # Enhanced error message with more debugging info
                         error_msg = (
@@ -1039,12 +1064,12 @@ class BaseNode(ABC):
 
     def get_credential(self, credential_id: str) -> Dict[str, Any]:
         """Get a credential by its ID"""
-        logger.info(f"Credentials: {self.credentials}")
+        logger.debug("Searching node credentials (count=%s)", len(self.credentials or []))
         if self.credentials:
             for cred in self.credentials:
                 c_id = cred.get('id')
                 if str(c_id) == str(credential_id):
-                    logger.info(f"Found Credential: {cred}")
+                    logger.debug("Credential match found (id=%s)", credential_id)
                     return cred
         return None
 

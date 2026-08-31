@@ -11,11 +11,13 @@ import type { ServiceDefinition } from "~/types/credentials";
 interface ServiceSelectionModalProps {
   onSelectService: (service: ServiceDefinition) => void;
   onClose: () => void;
+  allowedServiceTypes?: string[];
 }
 
 const ServiceSelectionModal: React.FC<ServiceSelectionModalProps> = ({
   onSelectService,
   onClose,
+  allowedServiceTypes,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -24,6 +26,9 @@ const ServiceSelectionModal: React.FC<ServiceSelectionModalProps> = ({
   const categories = Object.keys(servicesByCategory);
 
   const filteredServices = SERVICE_DEFINITIONS.filter((service) => {
+    if (allowedServiceTypes && !allowedServiceTypes.includes(service.id)) {
+      return false;
+    }
     const matchesSearch =
       service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       service.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -62,7 +67,7 @@ const ServiceSelectionModal: React.FC<ServiceSelectionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b border-gray-200">

@@ -15,7 +15,7 @@ import SmartSuggestionsSettingsModal from "../modals/SmartSuggestionsSettingsMod
 // Loading Component
 const LoadingNodes = () => (
   <div className="p-4 text-center">
-    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto mb-2"></div>
+    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
     <p className="text-sm text-gray-300">Loading nodes...</p>
   </div>
 );
@@ -33,7 +33,7 @@ const ErrorNodes = ({
     <p className="text-sm text-gray-300 mb-2">{error}</p>
     <button
       onClick={onRetry}
-      className="text-sm text-purple-400 hover:text-purple-300 flex items-center mx-auto"
+      className="text-sm text-blue-400 hover:text-blue-300 flex items-center mx-auto"
     >
       <RefreshCw className="h-3 w-3 mr-1" />
       Retry
@@ -130,7 +130,7 @@ function Sidebar({ onClose }: SidebarProps) {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="fixed top-36 h-[calc(100vh-12rem)] w-100 bg-[#18181A] overflow-y-auto z-30 shadow-2xl animate-slide-in rounded-2xl">
+    <div className="fixed top-16 left-16 h-[calc(100vh-4rem)] w-95 bg-[#18181B] border-r border-gray-800/80 overflow-y-auto overflow-x-hidden z-20 shadow-[5px_0_25px_rgba(0,0,0,0.5)] custom-scrollbar">
       {/* Header */}
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
@@ -149,11 +149,10 @@ function Sidebar({ onClose }: SidebarProps) {
             {/* Smart Suggestions Toggle */}
             <button
               onClick={toggleEnabled}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                isEnabled
-                  ? "bg-yellow-500/20 text-yellow-400 border border-yellow-400/30"
-                  : "bg-gray-700 text-gray-400 border border-gray-600"
-              }`}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${isEnabled
+                ? "bg-yellow-500/20 text-yellow-400 border border-yellow-400/30"
+                : "bg-gray-700 text-gray-400 border border-gray-600"
+                }`}
               title={
                 isEnabled
                   ? "Disable Smart Suggestions"
@@ -167,7 +166,7 @@ function Sidebar({ onClose }: SidebarProps) {
         </div>
 
         {/* Search Input */}
-        <label className="input w-full rounded-2xl bg-transparent text-gray-100 border border-gray-600 flex items-center gap-2 px-2 py-1 mb-3 focus-within:border-purple-400">
+        <label className="input w-full rounded-2xl bg-transparent text-gray-100 border border-gray-600 flex items-center gap-2 px-2 py-1 mb-3 focus-within:border-blue-400">
           <Search className="h-4 w-4 text-gray-400" />
           <input
             type="search"
@@ -217,7 +216,7 @@ function Sidebar({ onClose }: SidebarProps) {
                 ([categoryName, categoryNodes]) => (
                   <div
                     key={categoryName}
-                    className="collapse collapse-arrow rounded-lg bg-gray-800/30 border border-gray-700"
+                    className="collapse collapse-arrow rounded-lg bg-gray-800/30 border border-gray-700 w-full min-w-0"
                   >
                     <input type="checkbox" defaultChecked />
                     <div className="collapse-title font-semibold text-sm text-gray-200">
@@ -227,12 +226,9 @@ function Sidebar({ onClose }: SidebarProps) {
                         ({categoryNodes.length})
                       </span>
                     </div>
-                    <div className="collapse-content space-y-2">
+                    <div className="collapse-content w-full min-w-0 overflow-hidden pt-2 pb-1 px-1">
                       {categoryNodes.map((nodeType) => (
-                        <React.Fragment key={nodeType.id}>
-                          <DraggableNode nodeType={nodeType} icon={nodeType.data.icon} />
-                          <hr className="my-2 border-gray-600" />
-                        </React.Fragment>
+                        <DraggableNode key={nodeType.id} nodeType={nodeType} icon={nodeType.data.icon} />
                       ))}
                     </div>
                   </div>

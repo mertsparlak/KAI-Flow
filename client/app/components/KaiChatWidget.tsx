@@ -25,6 +25,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { v4 as uuidv4 } from "uuid";
 import { config } from "../lib/config";
+import { useAutosizeTextArea } from "../hooks/useAutosizeTextArea";
 
 interface Message {
   id: string;
@@ -67,7 +68,7 @@ export default function KaiChatWidget({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const sessionIdRef = useRef(uuidv4());
 
   const copyToClipboard = async (text: string) => {
@@ -92,6 +93,8 @@ export default function KaiChatWidget({
       inputRef.current?.focus();
     }
   }, [isOpen, isLoading]);
+
+  useAutosizeTextArea(inputRef.current, input, 128);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -310,6 +313,11 @@ export default function KaiChatWidget({
                     style={!msg.isBot ? { backgroundColor: color } : {}}
                   >
                     <div className="max-w-none break-words">
+                      {!msg.isBot ? (
+                        <p className="m-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-white">
+                          {msg.content}
+                        </p>
+                      ) : (
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm, remarkMath]}
                         rehypePlugins={[rehypeKatex, rehypeRaw]}
@@ -409,27 +417,27 @@ export default function KaiChatWidget({
 
                           // Başlıklar - modern hiyerarşi (Daha kompakt)
                           h1: ({ children }: any) => (
-                            <h1 className="text-lg font-bold mb-2 text-gray-900 pb-2 border-b-2 border-gradient-to-r from-blue-500 to-purple-600 relative">
-                              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                            <h1 className="text-lg font-bold mb-2 text-gray-900 pb-2 border-b-2 border-blue-500 relative">
+                              <span className="text-blue-600">
                                 {children}
                               </span>
                             </h1>
                           ),
                           h2: ({ children }: any) => (
                             <h2 className="text-base font-bold mb-2 text-gray-900 mt-4 flex items-center gap-2">
-                              <span className="w-1 h-5 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></span>
+                              <span className="w-1 h-5 bg-blue-500 rounded-full"></span>
                               {children}
                             </h2>
                           ),
                           h3: ({ children }: any) => (
                             <h3 className="text-sm font-semibold mb-2 text-gray-800 mt-3 flex items-center gap-2">
-                              <span className="w-1 h-4 bg-gradient-to-b from-blue-400 to-purple-500 rounded-full"></span>
+                              <span className="w-1 h-4 bg-blue-400 rounded-full"></span>
                               {children}
                             </h3>
                           ),
                           h4: ({ children }: any) => (
                             <h4 className="text-xs font-semibold mb-1 text-gray-700 mt-2 flex items-center gap-2">
-                              <span className="w-0.5 h-3 bg-gradient-to-b from-blue-400 to-purple-500 rounded-full"></span>
+                              <span className="w-0.5 h-3 bg-blue-400 rounded-full"></span>
                               {children}
                             </h4>
                           ),
@@ -456,7 +464,7 @@ export default function KaiChatWidget({
                                 className={`flex items-start gap-2 pl-1 leading-relaxed ${!msg.isBot ? "text-white" : "text-gray-700"
                                   }`}
                               >
-                                <span className="flex-shrink-0 w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 shadow-sm counter-increment">
+                                <span className="flex-shrink-0 w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 shadow-sm counter-increment">
                                   •
                                 </span>
                                 <div className="flex-1 pt-0.5 text-left">
@@ -468,7 +476,7 @@ export default function KaiChatWidget({
                                 className={`flex items-start gap-2 pl-1 leading-relaxed ${!msg.isBot ? "text-white" : "text-gray-700"
                                   }`}
                               >
-                                <span className="flex-shrink-0 w-1.5 h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mt-2 shadow-sm"></span>
+                                <span className="flex-shrink-0 w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 shadow-sm"></span>
                                 <div className="flex-1 text-left">
                                   {children}
                                 </div>
@@ -633,6 +641,7 @@ export default function KaiChatWidget({
                       >
                         {msg.content}
                       </ReactMarkdown>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -654,27 +663,28 @@ export default function KaiChatWidget({
 
             {/* Input Alanı */}
             <div className="p-4 bg-white border-t border-gray-100">
-              <div className="flex gap-2 items-center bg-gray-50 rounded-full px-4 py-2 border border-gray-200 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
-                <input
+              <div className="flex gap-2 items-end bg-gray-50 rounded-2xl px-4 py-2 border border-gray-200 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+                <textarea
                   ref={inputRef}
-                  type="text"
+                  rows={1}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
                       sendMessage();
                       // Immediate focus attempt after sending
                       setTimeout(() => inputRef.current?.focus(), 0);
                     }
                   }}
                   placeholder="Write your message..."
-                  className="flex-1 bg-transparent border-none focus:ring-0 outline-none text-sm py-1"
+                  className="flex-1 bg-transparent border-none focus:ring-0 outline-none text-sm py-1 resize-none overflow-y-auto max-h-32 min-h-[24px]"
                   disabled={isLoading}
                 />
                 <button
                   onClick={sendMessage}
                   disabled={isLoading || !input.trim()}
-                  className={`p-2 rounded-full transition-all ${input.trim() && !isLoading
+                  className={`p-2 rounded-full transition-all shrink-0 ${input.trim() && !isLoading
                     ? "text-blue-600 hover:bg-blue-50"
                     : "text-gray-400"
                     }`}

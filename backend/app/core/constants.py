@@ -119,7 +119,7 @@ def _decrypt_env_val(key: str, default: Optional[str] = None) -> Optional[str]:
 
 # Core Application Settings
 SECRET_KEY = _decrypt_env_val("SECRET_KEY", "your-secret-key-here-change-in-production")
-ENVIRONMENT = "development"
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 PORT = int(os.getenv("BACKEND_PORT","23056"))
 ROOT_PATH = os.getenv("ROOT_PATH")
 API_START = "api"
@@ -147,20 +147,19 @@ CREDENTIAL_MASTER_KEY = _decrypt_env_val("CREDENTIAL_MASTER_KEY")
 if not CREDENTIAL_MASTER_KEY:
     raise RuntimeError("CREDENTIAL_MASTER_KEY environment variable is required. Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"")
 # Logging
-LOG_LEVEL = "DEBUG"
-DEBUG = os.getenv("BACKEND_DEBUG", "false").lower() in ("true", "1", "t")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO" if ENVIRONMENT == "production" else "DEBUG").upper()
 
 # CORS Settings
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
 # LangSmith Settings
-LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "true")
+LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false")
 LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT")
 LANGCHAIN_API_KEY = _decrypt_env_val("LANGCHAIN_API_KEY")
 LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT")
 # Workflow Tracing
-ENABLE_WORKFLOW_TRACING = "true"
-TRACE_AGENT_REASONING ="true"
-TRACE_MEMORY_OPERATIONS = "true"
+ENABLE_WORKFLOW_TRACING = os.getenv("ENABLE_WORKFLOW_TRACING", "false").lower() in ("true", "1", "t")
+TRACE_AGENT_REASONING = os.getenv("TRACE_AGENT_REASONING", "false").lower() in ("true", "1", "t")
+TRACE_MEMORY_OPERATIONS = os.getenv("TRACE_MEMORY_OPERATIONS", "false").lower() in ("true", "1", "t")
 
 ALGORITHM = "HS256"
 

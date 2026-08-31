@@ -28,7 +28,7 @@ def setup_logging():
 
 def setup_langsmith():
     """Setup LangSmith tracing if enabled"""
-    if LANGCHAIN_TRACING_V2:
+    if str(LANGCHAIN_TRACING_V2).lower() in ("true", "1", "t"):
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         if LANGCHAIN_ENDPOINT:
             os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
@@ -49,21 +49,3 @@ def create_directories():
 def get_database_url() -> str:
     """Get database URL for direct connections"""
     return DATABASE_URL
-
-def get_cors_origins() -> List[str]:
-    """Get CORS origins"""
-    # Parse CORS origins if it's a string
-    origins = []
-    if isinstance(ALLOWED_ORIGINS, str):
-        origins = [origin.strip() for origin in ALLOWED_ORIGINS.split(',')]
-    else:
-        origins = ALLOWED_ORIGINS
-    
-    # Add dynamic origins based on environment
-    if DEBUG:
-        origins.extend([
-            "http://localhost:*",
-            "https://localhost:*"
-        ])
-    
-    return origins

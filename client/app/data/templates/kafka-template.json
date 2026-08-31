@@ -1,5 +1,7 @@
 {
   "id": "kafka-template",
+  "category": "automation",
+  "created_at": "2025-04-01T00:00:00.000Z",
   "name": "Kafka Template",
   "description": "Automated Data Security (DLP) review pipeline. Listens to Kafka for column classification requests (REVIEW/SUSPECT), uses AI to validate sample data against security rules, and publishes the final decision back to Kafka.",
   "colorFrom": "from-rose-400",
@@ -16,7 +18,7 @@
         "data": {
           "name": "kafka_consumer_trigger",
           "topic": "ai-column-review-request",
-          "group_id": "kai-fusion-test-group",
+          "group_id": "kai-flow-test-group",
           "credential": "f94f7bc2-341d-496c-97d0-6b481d88bdf3",
           "only_message": true,
           "_active_optional_fields": [

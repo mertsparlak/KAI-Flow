@@ -68,6 +68,7 @@ export interface Workflow {
   id: string;
   name: string;
   description?: string;
+  category?: string;
   flow_data: WorkflowData;
   user_id: string;
   user?: UserInfo;
@@ -82,14 +83,17 @@ export interface Workflow {
 export interface WorkflowCreateRequest {
   name: string;
   description?: string;
+  category?: string;
   flow_data: WorkflowData;
   is_public?: boolean;
   error_workflow?: string | null;
+  chatflow_id?: string;
 }
 
 export interface WorkflowUpdateRequest {
   name?: string;
   description?: string;
+  category?: string;
   flow_data?: WorkflowData;
   is_public?: boolean;
   error_workflow?: string | null;
@@ -279,6 +283,25 @@ export interface CredentialCreateRequest {
   service_type?: string;
 }
 
+export interface CredentialWorkflowNodeUsage {
+  node_id: string;
+  node_type: string;
+  field: string;
+}
+
+export interface CredentialWorkflowUsageItem {
+  id: string;
+  name: string;
+  updated_at: string;
+  using_nodes: CredentialWorkflowNodeUsage[];
+}
+
+export interface CredentialWorkflowUsageResponse {
+  credential_id: string;
+  workflow_count: number;
+  workflows: CredentialWorkflowUsageItem[];
+}
+
 // Variables types (for future implementation)
 export interface Variable {
   id: string;
@@ -397,12 +420,12 @@ export interface ChatMessageInput {
 
 // Webhook execution event types
 export interface ExecutionEvent {
-  type: "node_start" | "node_end" | "complete" | "workflow_complete" | "error" | "token";
+  type: "node_start" | "node_end" | "node_status" | "complete" | "workflow_complete" | "error" | "token";
   node_id?: string;
   output?: any;
   result?: any;
   error?: string;
-  status?: "success" | "failed" | "error";
+  status?: "pending" | "success" | "failed" | "error";
   previous_node_id?: string;
   edge_id?: string;
   edge_ids?: string[];
@@ -414,6 +437,10 @@ export interface ExecutionEvent {
   inputs?: Record<string, any>;
   inputs_meta?: Record<string, any>;
   node_outputs?: Record<string, any>;
+  execution_role?: "workflow" | "dependency";
+  node_statuses?: Record<string, "pending" | "success" | "failed">;
+  edge_statuses?: Record<string, "pending" | "success" | "failed">;
+  execution_node_id?: string;
   executed_nodes?: string[];
   session_id?: string;
 }
